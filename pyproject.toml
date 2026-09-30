@@ -1,0 +1,17 @@
+[project]
+name = "photometa"
+version = "1.0.0"
+description = "Photo metadata viewer"
+requires-python = ">=3.9"
+dependencies = [
+  "flet==0.28.3",
+  "pillow"
+]
+
+[tool.flet]
+product = "Photo Meta"
+org = "com.kaushal.photometa"
+company = "Kaushal"
+
+[tool.flet.android]
+min_sdk_version = 24
