@@ -62,8 +62,7 @@ def main(page: ft.Page):
     page.title = "Photo Meta"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor = "#0D0F14"
-    page.padding = 20
-    page.scroll = ft.ScrollMode.AUTO
+    page.padding = 0
 
     ACCENT = "#7C5CFF"
     state = {"path": None}
@@ -72,6 +71,16 @@ def main(page: ft.Page):
                        border_radius=16, visible=False)
     result_col = ft.Column(spacing=12)
 
+    def glow(color, size, **pos):
+        return ft.Container(
+            width=size, height=size,
+            gradient=ft.RadialGradient(
+                colors=[ft.Colors.with_opacity(0.45, color), ft.Colors.TRANSPARENT],
+                radius=0.5,
+            ),
+            **pos,
+        )
+
     def card(title, icon, rows):
         items = []
         for k, v in rows.items():
@@ -79,17 +88,19 @@ def main(page: ft.Page):
                 items.append(ft.TextButton("Open in Google Maps", url=v))
             else:
                 items.append(ft.Row([
-                    ft.Text(k, color="#8A90A2", size=13, width=110),
+                    ft.Text(k, color="#9AA0B4", size=13, width=110),
                     ft.Text(v, size=14, expand=True, selectable=True),
                 ]))
         return ft.Container(
             content=ft.Column([
                 ft.Row([ft.Icon(icon, color=ACCENT, size=20),
                         ft.Text(title, size=16, weight=ft.FontWeight.BOLD)]),
-                ft.Divider(height=1, color="#252A36"),
+                ft.Divider(height=1, color="#2C3142"),
                 *items,
             ], spacing=8),
-            bgcolor="#161A23", padding=16, border_radius=16,
+            bgcolor=ft.Colors.with_opacity(0.65, "#161A23"),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.25, ACCENT)),
+            padding=16, border_radius=16,
         )
 
     def on_pick(e: ft.FilePickerResultEvent):
@@ -99,6 +110,7 @@ def main(page: ft.Page):
             preview.visible = True
             done_btn.visible = True
             change_btn.visible = True
+            back_btn.visible = True
             select_btn.visible = False
             result_col.controls.clear()
             page.update()
@@ -108,6 +120,16 @@ def main(page: ft.Page):
 
     def pick(e):
         picker.pick_files(file_type=ft.FilePickerFileType.IMAGE)
+
+    def go_home(e):
+        state["path"] = None
+        preview.visible = False
+        done_btn.visible = False
+        change_btn.visible = False
+        back_btn.visible = False
+        select_btn.visible = True
+        result_col.controls.clear()
+        page.update()
 
     def show_result(e):
         result_col.controls.clear()
@@ -131,6 +153,8 @@ def main(page: ft.Page):
                 result_col.controls.append(card(title, icon, {"Status": "No location in this photo"}))
         page.update()
 
+    back_btn = ft.TextButton("Back", icon=ft.Icons.ARROW_BACK, on_click=go_home,
+                             visible=False)
     select_btn = ft.ElevatedButton(
         "Select Photo", icon=ft.Icons.PHOTO_LIBRARY, on_click=pick,
         bgcolor=ACCENT, color="white", height=56, width=260,
@@ -146,17 +170,43 @@ def main(page: ft.Page):
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=25)),
     )
 
-    page.add(
-        ft.Column([
+    body = ft.Column(
+        [
+            ft.Row([back_btn]),
             ft.Text("Photo Meta", size=32, weight=ft.FontWeight.BOLD),
-            ft.Text("See the hidden details of any photo", color="#8A90A2"),
+            ft.Text("See the hidden details of any photo", color="#9AA0B4"),
             ft.Container(height=20),
             ft.Row([preview], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([select_btn], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([done_btn, change_btn], alignment=ft.MainAxisAlignment.CENTER),
             ft.Container(height=10),
             result_col,
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+    )
+
+    page.add(
+        ft.Stack(
+            [
+                ft.Container(
+                    expand=True,
+                    gradient=ft.LinearGradient(
+                        begin=ft.alignment.top_left,
+                        end=ft.alignment.bottom_right,
+                        colors=["#0D0F14", "#1A1240", "#2B1B6B"],
+                    ),
+                ),
+                glow(ACCENT, 420, left=-120, top=-100),
+                glow("#2EC4B6", 380, right=-140, bottom=-100),
+                ft.SafeArea(
+                    ft.Container(content=body, padding=20, expand=True),
+                    expand=True,
+                ),
+            ],
+            expand=True,
+        )
     )
 
 
