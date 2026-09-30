@@ -23,6 +23,11 @@ jobs:
       - name: Install Flet
         run: pip install flet==0.28.3
 
+      - name: Set icon
+        run: |
+          mkdir -p assets
+          cp icon.png assets/icon.png
+
       - name: Build APK
         run: flet build apk
 
