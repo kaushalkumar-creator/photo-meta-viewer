@@ -1,0 +1,33 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Flet
+        run: pip install flet==0.28.3
+
+      - name: Build APK
+        run: flet build apk --yes
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-meta-apk
+          path: build/apk/*.apk
