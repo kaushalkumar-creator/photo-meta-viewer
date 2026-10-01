@@ -15,3 +15,15 @@ company = "Kaushal"
 
 [tool.flet.android]
 min_sdk_version = 24
+
+[tool.flet.splash]
+color = "#0B0B14"
+dark_color = "#0B0B14"
+
+[tool.flet.app.boot_screen]
+show = true
+message = "Preparing Photo Meta..."
+
+[tool.flet.app.startup_screen]
+show = true
+message = "Starting..."
