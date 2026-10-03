@@ -3,11 +3,16 @@ from PIL import Image, ImageOps
 from PIL.ExifTags import TAGS, GPSTAGS
 import os, io, base64, time, urllib.parse
 
-ACCENT = "#7C5CFF"
+BASE = "#E8EEF6"
+SH_D = "#BDC9DA"
+SH_L = "#FFFFFF"
+TEXT = "#2E3647"
+MUTED = "#8A94A6"
+PINK = "#FF7BAC"
+ORANGE = "#FF9A6B"
+BLUE = "#5B8DEF"
 TEAL = "#2EC4B6"
-RED = "#FF6B81"
-BG = "#0B0B14"
-MUTED = "#9AA0B4"
+AMBER = "#FFB547"
 PHONES = {"2411DRN47I": "Redmi 14C 5G"}
 TINY = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
@@ -34,7 +39,6 @@ def make_preview(path):
 
 
 def clean_bytes(path):
-    # naya JPEG bina EXIF ke (location, camera info sab hat jaata hai)
     img = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=95)
@@ -110,90 +114,110 @@ def read_metadata(path):
 
 def main(page: ft.Page):
     page.title = "Photo Meta"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor = BG
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.bgcolor = BASE
     page.padding = 0
+    try:
+        page.appbar = ft.AppBar(
+            toolbar_height=0, bgcolor=BASE, elevation=0,
+            system_overlay_style=ft.SystemOverlayStyle(
+                status_bar_color=BASE,
+                status_bar_icon_brightness=ft.Brightness.DARK,
+            ),
+        )
+    except Exception:
+        pass
+
     st = {"path": None, "data": None}
     W = ft.Colors.with_opacity
     box_w = (page.width or 380) - 40
+    GRAD = ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
+                             colors=[PINK, ORANGE])
 
-    preview = ft.Image(src_base64=TINY, width=320, height=320, fit=ft.ImageFit.CONTAIN)
-    preview_box = ft.Container(
-        preview, border_radius=24, visible=False,
-        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-        shadow=ft.BoxShadow(blur_radius=40, color=W(0.35, ACCENT)),
-    )
-    results = ft.Column(spacing=14)
+    def neu(content=None, radius=24, padding=0, depth=8, **kw):
+        return ft.Container(
+            content=content, padding=padding, border_radius=radius, bgcolor=BASE,
+            shadow=[
+                ft.BoxShadow(blur_radius=depth * 2, offset=ft.Offset(depth, depth), color=SH_D),
+                ft.BoxShadow(blur_radius=depth * 2, offset=ft.Offset(-depth, -depth), color=SH_L),
+            ], **kw)
+
+    def badge(icon, color, size=40):
+        return neu(ft.Icon(icon, color=color, size=size * 0.5), radius=size / 2, depth=4,
+                   width=size, height=size, alignment=ft.alignment.center)
 
     def toast(msg):
-        page.open(ft.SnackBar(ft.Text(msg), bgcolor="#1E1A3A",
+        page.open(ft.SnackBar(ft.Text(msg, color="white"), bgcolor=TEXT,
                               behavior=ft.SnackBarBehavior.FLOATING))
 
-    def glow(color, size, **pos):
-        return ft.Container(
-            width=size, height=size,
-            gradient=ft.RadialGradient(colors=[W(0.45, color), ft.Colors.TRANSPARENT], radius=0.5),
-            **pos)
+    preview = ft.Image(src_base64=TINY, width=300, height=300, fit=ft.ImageFit.CONTAIN)
+    preview_box = neu(
+        ft.Container(preview, border_radius=22, clip_behavior=ft.ClipBehavior.ANTI_ALIAS),
+        radius=28, padding=10, depth=10, visible=False)
+    results = ft.Column(spacing=18)
 
-    def gbtn(text, icon, on_click, width=260, visible=True, outline=False):
-        return ft.Container(
+    def gbtn(text, icon, on_click, width=260, visible=True, grad=True):
+        fg = "white" if grad else TEXT
+        icon_c = "white" if grad else PINK
+        c = ft.Container(
             content=ft.Row(
-                [ft.Icon(icon, color="white", size=22),
-                 ft.Text(text, size=16, weight=ft.FontWeight.W_600, color="white")],
+                [ft.Icon(icon, color=icon_c, size=22),
+                 ft.Text(text, size=16, weight=ft.FontWeight.W_600, color=fg)],
                 alignment=ft.MainAxisAlignment.CENTER, spacing=10),
             width=width, height=56, border_radius=28, visible=visible,
             ink=True, on_click=on_click,
-            gradient=None if outline else ft.LinearGradient(
-                begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
-                colors=["#9B7BFF", "#5B3DF5"]),
-            bgcolor=W(0.06, "white") if outline else None,
-            border=ft.border.all(1.5, W(0.45, "white")) if outline else None,
-            shadow=None if outline else ft.BoxShadow(
-                blur_radius=28, color=W(0.55, ACCENT), offset=ft.Offset(0, 8)),
         )
+        if grad:
+            c.gradient = GRAD
+            c.shadow = ft.BoxShadow(blur_radius=24, color=W(0.5, PINK), offset=ft.Offset(0, 10))
+        else:
+            c.bgcolor = BASE
+            c.shadow = [
+                ft.BoxShadow(blur_radius=16, offset=ft.Offset(6, 6), color=SH_D),
+                ft.BoxShadow(blur_radius=16, offset=ft.Offset(-6, -6), color=SH_L),
+            ]
+        return c
 
     def tile(label, icon, color, on_click):
-        return ft.Container(
+        return neu(
             ft.Column([ft.Icon(icon, color=color, size=24),
-                       ft.Text(label, size=12, color="white")],
+                       ft.Text(label, size=12, color=TEXT, weight=ft.FontWeight.W_500)],
                       horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                       alignment=ft.MainAxisAlignment.CENTER, spacing=6),
-            expand=True, height=78, border_radius=18, ink=True, on_click=on_click,
-            bgcolor=W(0.07, "white"), border=ft.border.all(1, W(0.3, color)),
-        )
+            radius=20, depth=6, expand=True, height=82, ink=True, on_click=on_click)
 
-    def chip(label, icon):
-        return ft.Container(
-            ft.Row([ft.Icon(icon, size=15, color=ACCENT),
-                    ft.Text(label, size=12, color="white")], spacing=6, tight=True),
-            padding=ft.padding.symmetric(horizontal=12, vertical=7),
-            border_radius=20, bgcolor=W(0.07, "white"),
-            border=ft.border.all(1, W(0.14, "white")),
-        )
+    def feature(label, sub, icon, color):
+        return neu(
+            ft.Column([badge(icon, color, 44),
+                       ft.Text(label, size=15, weight=ft.FontWeight.W_700, color=TEXT),
+                       ft.Text(sub, size=11, color=MUTED)],
+                      spacing=4),
+            radius=22, depth=8, padding=16, expand=True)
 
     def card(title, icon, color, rows):
         items = []
         for k, v in rows.items():
             if k == "Map":
-                items.append(ft.TextButton("Open in Google Maps", icon=ft.Icons.MAP, url=v))
+                items.append(ft.TextButton(
+                    content=ft.Row([ft.Icon(ft.Icons.MAP, size=18, color=PINK),
+                                    ft.Text("Open in Google Maps", color=PINK)], tight=True),
+                    url=v))
             else:
                 items.append(ft.Row([
                     ft.Text(k, color=MUTED, size=13, width=110),
-                    ft.Text(v, size=14, expand=True, selectable=True)]))
-        return ft.Container(
-            content=ft.Column([
-                ft.Row([ft.Icon(icon, color=color, size=20),
-                        ft.Text(title, size=16, weight=ft.FontWeight.BOLD)]),
-                ft.Divider(height=1, color=W(0.12, "white")),
-                *items], spacing=8),
-            padding=18, border_radius=20,
-            bgcolor=W(0.07, "white"),
-            border=ft.border.all(1, W(0.14, "white")),
-            blur=ft.Blur(12, 12, ft.BlurTileMode.MIRROR),
+                    ft.Text(v, size=14, color=TEXT, expand=True, selectable=True)]))
+        c = neu(
+            ft.Column([
+                ft.Row([badge(icon, color, 38),
+                        ft.Text(title, size=16, weight=ft.FontWeight.W_700, color=TEXT)],
+                       spacing=12),
+                ft.Divider(height=1, color=SH_D),
+                *items], spacing=10),
+            radius=24, depth=8, padding=18,
             opacity=0, animate_opacity=400,
             offset=ft.Offset(0, 0.08),
-            animate_offset=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
-        )
+            animate_offset=ft.Animation(400, ft.AnimationCurve.EASE_OUT))
+        return c
 
     # ---------- pick / save ----------
     def on_pick(e: ft.FilePickerResultEvent):
@@ -215,7 +239,7 @@ def main(page: ft.Page):
 
     def on_saved(e: ft.FilePickerResultEvent):
         if getattr(e, "path", None):
-            toast("Clean photo saved")
+            toast(f"Saved: {e.path}")
 
     picker = ft.FilePicker(on_result=on_pick)
     saver = ft.FilePicker(on_result=on_saved)
@@ -279,10 +303,10 @@ def main(page: ft.Page):
             return
         st["data"] = d
         spec = [
-            ("Camera / Phone", ft.Icons.PHONE_ANDROID, ACCENT, d["camera"]),
-            ("Date & Time", ft.Icons.SCHEDULE, RED, d["time"]),
-            ("Location", ft.Icons.LOCATION_ON, "#B388FF", d["location"]),
-            ("Camera Settings", ft.Icons.CAMERA_ALT, "#FFB547", d["settings"]),
+            ("Camera / Phone", ft.Icons.PHONE_ANDROID, BLUE, d["camera"]),
+            ("Date & Time", ft.Icons.SCHEDULE, PINK, d["time"]),
+            ("Location", ft.Icons.LOCATION_ON, ORANGE, d["location"]),
+            ("Camera Settings", ft.Icons.CAMERA_ALT, AMBER, d["settings"]),
             ("File Info", ft.Icons.INSERT_DRIVE_FILE, TEAL, d["file"]),
         ]
         cards = []
@@ -301,57 +325,69 @@ def main(page: ft.Page):
             c.update()
 
     # ---------- widgets ----------
-    back_btn = ft.TextButton("Back", icon=ft.Icons.ARROW_BACK, on_click=go_home, visible=False)
+    back_btn = ft.Container(
+        neu(ft.Icon(ft.Icons.ARROW_BACK, color=TEXT, size=20), radius=22, depth=5,
+            width=44, height=44, alignment=ft.alignment.center, ink=True, on_click=go_home),
+        visible=False, margin=ft.margin.only(bottom=10))
     select_btn = gbtn("Select Photo", ft.Icons.PHOTO_LIBRARY, pick)
     done_btn = gbtn("Done", ft.Icons.CHECK, show_result, width=160, visible=False)
-    change_btn = gbtn("Change", ft.Icons.SWAP_HORIZ, pick, width=140, visible=False, outline=True)
+    change_btn = gbtn("Change", ft.Icons.SWAP_HORIZ, pick, width=140, visible=False, grad=False)
 
     actions_wrap = ft.Container(
         ft.Row([
-            tile("Copy", ft.Icons.CONTENT_COPY, ACCENT, copy_meta),
+            tile("Copy", ft.Icons.CONTENT_COPY, BLUE, copy_meta),
             tile("Share", ft.Icons.SHARE, TEAL, share_meta),
-            tile("Remove Meta", ft.Icons.SHIELD, RED, remove_meta),
-        ], spacing=10),
-        width=box_w, visible=False,
+            tile("Remove Meta", ft.Icons.SHIELD, PINK, remove_meta),
+        ], spacing=14),
+        width=box_w, visible=False, padding=ft.padding.symmetric(vertical=6),
     )
 
-    hero = ft.Container(
-        ft.Icon(ft.Icons.IMAGE_SEARCH, size=80, color="white"),
-        width=170, height=170, border_radius=85, alignment=ft.alignment.center,
-        gradient=ft.LinearGradient(colors=[W(0.4, ACCENT), W(0.08, "white")]),
-        border=ft.border.all(1, W(0.25, "white")),
-        shadow=ft.BoxShadow(blur_radius=60, color=W(0.45, ACCENT)),
-        margin=ft.margin.only(top=26, bottom=26),
-    )
-    chips = ft.Row(
-        [chip("Camera", ft.Icons.CAMERA_ALT), chip("Date", ft.Icons.SCHEDULE),
-         chip("GPS", ft.Icons.LOCATION_ON), chip("Clean", ft.Icons.SHIELD)],
-        wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=8, run_spacing=8,
-    )
+    hero = neu(
+        ft.Container(
+            ft.Icon(ft.Icons.IMAGE_SEARCH, size=62, color="white"),
+            width=130, height=130, border_radius=65, alignment=ft.alignment.center,
+            gradient=GRAD,
+            shadow=ft.BoxShadow(blur_radius=26, color=W(0.5, PINK), offset=ft.Offset(0, 10))),
+        radius=100, depth=14, width=200, height=200, alignment=ft.alignment.center,
+        margin=ft.margin.only(top=18, bottom=26))
+
+    grid = ft.Container(
+        ft.Column([
+            ft.Row([feature("Camera", "Brand & model", ft.Icons.CAMERA_ALT, BLUE),
+                    feature("Date", "When it was taken", ft.Icons.SCHEDULE, PINK)], spacing=16),
+            ft.Row([feature("GPS", "Where it was taken", ft.Icons.LOCATION_ON, ORANGE),
+                    feature("Clean", "Remove metadata", ft.Icons.SHIELD, TEAL)], spacing=16),
+        ], spacing=16),
+        width=box_w)
+    home_extra = ft.Column([hero, grid, ft.Container(height=14)],
+                           horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
     privacy = ft.Row(
         [ft.Icon(ft.Icons.LOCK_OUTLINE, size=14, color=MUTED),
          ft.Text("Photos never leave your phone", size=12, color=MUTED)],
-        alignment=ft.MainAxisAlignment.CENTER, spacing=6,
-    )
-    home_extra = ft.Column(
-        [hero, chips, ft.Container(height=8)],
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-    )
+        alignment=ft.MainAxisAlignment.CENTER, spacing=6)
+
+    header = ft.Row([
+        ft.Column([
+            ft.Text("Photo Meta", size=30, weight=ft.FontWeight.W_800, color=TEXT),
+            ft.Text("Discover the hidden story of every photo", size=12, color=MUTED),
+        ], spacing=2, expand=True),
+        badge(ft.Icons.IMAGE_SEARCH, PINK, 48),
+    ], vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
     body = ft.Column(
         [
             ft.Row([back_btn]),
-            ft.Text("Photo Meta", size=36, weight=ft.FontWeight.W_800),
-            ft.Text("Discover the hidden story of every photo", color=MUTED, size=14),
+            ft.Container(header, width=box_w),
             home_extra,
             ft.Row([preview_box], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Container(height=14),
+            ft.Container(height=18),
             ft.Row([select_btn], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Row([done_btn, change_btn], alignment=ft.MainAxisAlignment.CENTER, spacing=12),
+            ft.Row([done_btn, change_btn], alignment=ft.MainAxisAlignment.CENTER, spacing=14),
             ft.Container(height=10),
             actions_wrap,
             ft.Container(height=6),
-            results,
+            ft.Container(results, width=box_w),
             ft.Container(height=14),
             privacy,
             ft.Container(height=24),
@@ -365,30 +401,29 @@ def main(page: ft.Page):
     )
 
     # ---------- loading screen ----------
-    logo = ft.Container(
-        ft.Image(src="icon.png", width=120, height=120, border_radius=28),
-        border_radius=28, scale=0.85, opacity=0,
+    logo = neu(
+        ft.Image(src="icon.png", width=96, height=96, border_radius=24),
+        radius=48, depth=12, width=150, height=150, alignment=ft.alignment.center,
+        scale=0.85, opacity=0,
         animate_scale=ft.Animation(650, ft.AnimationCurve.EASE_IN_OUT),
-        animate_opacity=600,
-        shadow=ft.BoxShadow(blur_radius=60, color=W(0.5, ACCENT)),
-    )
-    bar = ft.ProgressBar(width=150, bar_height=3, color=ACCENT, bgcolor=W(0.15, "white"))
+        animate_opacity=600)
+    line = ft.Container(
+        height=5, width=40, border_radius=3, gradient=GRAD,
+        animate=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT))
     tag = ft.Text("Reading hidden details...", size=13, color=MUTED,
                   opacity=0, animate_opacity=500)
     splash = ft.Container(
         content=ft.Column(
-            [logo, ft.Container(height=10), bar, tag],
+            [logo, ft.Container(height=14), line, tag],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=14),
-        bgcolor=BG, expand=True, alignment=ft.alignment.center, animate_opacity=500,
+        bgcolor=BASE, expand=True, alignment=ft.alignment.center, animate_opacity=500,
     )
 
     page.add(ft.Stack([
         ft.Container(expand=True, gradient=ft.LinearGradient(
-            begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
-            colors=[BG, "#1A1240", "#2B1B6B"])),
-        glow(ACCENT, 420, left=-120, top=-100),
-        glow(TEAL, 380, right=-140, bottom=-100),
+            begin=ft.alignment.top_center, end=ft.alignment.bottom_center,
+            colors=["#F3F7FC", BASE, "#DDE5F0"])),
         ft.SafeArea(body_wrap, expand=True),
         splash,
     ], expand=True))
@@ -396,14 +431,15 @@ def main(page: ft.Page):
     logo.opacity = 1
     logo.scale = 1
     page.update()
-    time.sleep(0.7)
+    time.sleep(0.6)
     tag.opacity = 1
-    logo.scale = 1.08
+    logo.scale = 1.06
+    line.width = 170
     page.update()
-    time.sleep(0.7)
+    time.sleep(1.0)
     logo.scale = 1
     page.update()
-    time.sleep(0.5)
+    time.sleep(0.3)
     splash.opacity = 0
     body_wrap.opacity = 1
     body_wrap.offset = ft.Offset(0, 0)
