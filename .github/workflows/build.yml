@@ -2,28 +2,37 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [v2.0-dev]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Flet
-        run: pip install flet==0.28.3
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet==0.28.3 pillow
 
-      - name: Set icon
+      - name: Set app icon
         run: |
           mkdir -p assets
           cp icon.png assets/icon.png
@@ -37,3 +46,4 @@ jobs:
         with:
           name: photo-meta-apk
           path: build/apk/*.apk
+          if-no-files-found: error
