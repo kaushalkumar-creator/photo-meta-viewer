@@ -166,6 +166,40 @@ def edit_bytes(path, fields):
     return buf.getvalue()
 
 
+def shrink_bytes(path, max_side, strip=True):
+    img = ImageOps.exif_transpose(Image.open(path))
+    exif = img.getexif()
+    img = img.convert("RGB")
+    img.thumbnail((max_side, max_side))
+    buf = io.BytesIO()
+    if strip:
+        img.save(buf, "JPEG", quality=85, optimize=True)
+    else:
+        img.save(buf, "JPEG", quality=85, optimize=True, exif=exif)
+    return buf.getvalue()
+
+
+def flat_meta(d):
+    out = {}
+    for sec in ("camera", "time", "location", "settings", "file"):
+        for k, v in (d.get(sec) or {}).items():
+            if k != "Map":
+                out[k] = v
+    return out
+
+
+def compare_rows(a, b):
+    fa, fb = flat_meta(a), flat_meta(b)
+    diff, same = [], 0
+    for k in list(fa) + [k for k in fb if k not in fa]:
+        va, vb = fa.get(k, "-"), fb.get(k, "-")
+        if va == vb:
+            same += 1
+        else:
+            diff.append((k, va, vb))
+    return diff, same
+
+
 def _derive(password, salt):
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 20000, 32)
 
@@ -276,6 +310,11 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor = BASE
     page.padding = 0
+    try:
+        page.theme = ft.Theme(scrollbar_theme=ft.ScrollbarTheme(
+            thumb_visibility=False, track_visibility=False, thickness=0))
+    except Exception:
+        pass
     try:
         page.appbar = ft.AppBar(
             toolbar_height=0, bgcolor=BASE, elevation=0,
@@ -541,6 +580,69 @@ def main(page: ft.Page):
             ft.Container(ft.Column([f_pw], tight=True), width=320),
             [dbtn("Cancel", lambda e: page.close(dlg)), dbtn("Reveal", reveal, primary=True)])
 
+    # ---------- shrink ----------
+    def ask_shrink(paths):
+        rg = ft.RadioGroup(value="1600", content=ft.Column([
+            ft.Radio(value="1080", label="Small - 1080 px (fast to send)"),
+            ft.Radio(value="1600", label="Medium - 1600 px"),
+            ft.Radio(value="2400", label="Large - 2400 px")], tight=True))
+        chk = ft.Checkbox(label="Also remove metadata", value=True, active_color=PINK)
+
+        def go(e):
+            size = int(rg.value or "1600")
+            strip = bool(chk.value)
+            page.close(dlg)
+            toast("Working, please wait...")
+            ok, bad, before, after = 0, 0, 0, 0
+            for p in paths:
+                try:
+                    data = shrink_bytes(p, size, strip)
+                    save_out("small", p, "jpg", data)
+                    before += os.path.getsize(p)
+                    after += len(data)
+                    ok += 1
+                except Exception:
+                    bad += 1
+            msg = f"{ok} photo(s) saved: {before // 1024} KB to {after // 1024} KB"
+            if bad:
+                msg += f" ({bad} failed)"
+            toast(msg)
+
+        dlg = dialog(
+            f"Shrink {len(paths)} photo(s)",
+            ft.Container(ft.Column([
+                ft.Text("Makes a smaller copy that is easier to send. Original stays untouched.",
+                        size=13, color=MUTED),
+                rg, chk], tight=True, spacing=10), width=320),
+            [dbtn("Cancel", lambda e: page.close(dlg)), dbtn("Shrink", go, primary=True)])
+
+    # ---------- compare ----------
+    def compare(paths):
+        if len(paths) < 2:
+            toast("Select 2 photos to compare")
+            return
+        try:
+            diff, same = compare_rows(read_metadata(paths[0]), read_metadata(paths[1]))
+        except Exception as ex:
+            toast(f"Error: {ex}")
+            return
+        items = [ft.Text(f"{len(diff)} different, {same} same", size=13, color=MUTED)]
+        if len(paths) > 2:
+            items.append(ft.Text("Only the first 2 photos were compared.", size=12, color=MUTED))
+        if not diff:
+            items.append(ft.Text("The metadata of both photos is identical.", size=14, color=TEXT))
+        for k, va, vb in diff:
+            items.append(ft.Column([
+                ft.Text(k, size=13, weight=ft.FontWeight.W_700, color=TEXT),
+                ft.Text(f"Photo 1: {va}", size=13, color=BLUE, selectable=True),
+                ft.Text(f"Photo 2: {vb}", size=13, color=ORANGE, selectable=True),
+            ], spacing=2))
+        dlg = dialog(
+            "Compare photos",
+            ft.Container(ft.Column(items, tight=True, spacing=12, scroll=ft.ScrollMode.AUTO),
+                         width=320, height=min(420, 80 + len(diff) * 80)),
+            [dbtn("Close", lambda e: page.close(dlg), primary=True)])
+
     # ---------- locate ----------
     def locate(path):
         try:
@@ -566,6 +668,12 @@ def main(page: ft.Page):
         if mode == "clean":
             ask_clean(paths)
             return
+        if mode == "shrink":
+            ask_shrink(paths)
+            return
+        if mode == "compare":
+            compare(paths)
+            return
         path = paths[0]
         if mode == "locate":
             locate(path)
@@ -588,7 +696,6 @@ def main(page: ft.Page):
         preview_box.visible = True
         done_btn.visible = change_btn.visible = back_btn.visible = True
         home_extra.visible = False
-        select_btn.visible = False
         actions_wrap.visible = False
         results.controls.clear()
         page.update()
@@ -602,7 +709,7 @@ def main(page: ft.Page):
             picker.pick_files(file_type=ft.FilePickerFileType.IMAGE)
         else:
             picker.pick_files(file_type=ft.FilePickerFileType.IMAGE,
-                              allow_multiple=(mode == "clean"))
+                              allow_multiple=(mode in ("clean", "shrink", "compare")))
 
     def copy_meta(e):
         if st["data"]:
@@ -620,7 +727,6 @@ def main(page: ft.Page):
         preview_box.visible = False
         done_btn.visible = change_btn.visible = back_btn.visible = False
         home_extra.visible = True
-        select_btn.visible = True
         actions_wrap.visible = False
         results.controls.clear()
         page.update()
@@ -663,7 +769,6 @@ def main(page: ft.Page):
         neu(ft.Icon(ft.Icons.ARROW_BACK, color=TEXT, size=20), radius=22, depth=5,
             width=44, height=44, alignment=ft.alignment.center, ink=True, on_click=go_home),
         visible=False, margin=ft.margin.only(bottom=10))
-    select_btn = gbtn("Select Photo", ft.Icons.PHOTO_LIBRARY, lambda e: start_pick("inspect"))
     done_btn = gbtn("Done", ft.Icons.CHECK, show_result, width=160, visible=False)
     change_btn = gbtn("Change", ft.Icons.SWAP_HORIZ, lambda e: start_pick("inspect"),
                       width=140, visible=False, grad=False)
@@ -707,6 +812,12 @@ def main(page: ft.Page):
                 feature("Reveal", "Read hidden secret", ft.Icons.VISIBILITY, BLUE,
                         lambda e: start_pick("reveal")),
             ], spacing=16),
+            ft.Row([
+                feature("Shrink", "Smaller, easy to send", ft.Icons.COMPRESS, ORANGE,
+                        lambda e: start_pick("shrink")),
+                feature("Compare", "Spot the differences", ft.Icons.COMPARE, TEAL,
+                        lambda e: start_pick("compare")),
+            ], spacing=16),
         ], spacing=16),
         width=box_w, padding=ft.padding.only(right=2, bottom=12))
     home_extra = ft.Column([hero, grid, ft.Container(height=10)],
@@ -732,7 +843,6 @@ def main(page: ft.Page):
             home_extra,
             ft.Row([preview_box], alignment=ft.MainAxisAlignment.CENTER),
             ft.Container(height=18),
-            ft.Row([select_btn], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([done_btn, change_btn], alignment=ft.MainAxisAlignment.CENTER, spacing=14),
             ft.Container(height=10),
             actions_wrap,
